@@ -9,15 +9,14 @@
   body { background: linear-gradient(135deg, #f0fdf4, #ccfbf1); min-height: 100vh; }
   .fade-in { animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
-  .dropdown-list { display:none; position:absolute; z-index:50; top:100%; left:0; min-width:140px; background:white; border:1px solid #9FE1CB; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.08); overflow:hidden; margin-top:4px; }
-  .dropdown-list.open { display:block; }
+  .dd-list { display:none; position:absolute; z-index:50; top:100%; left:0; min-width:140px; background:white; border:1px solid #9FE1CB; border-radius:10px; overflow:hidden; margin-top:4px; }
+  .dd-list.open { display:block; }
 </style>
 </head>
 <body class="p-3">
 <div class="max-w-2xl mx-auto" id="app">
   <div class="text-center py-10 text-teal-600 text-lg">読み込み中...</div>
 </div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -35,41 +34,41 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const SLOTS = ["朝", "昼", "晩"];
-const SLOT_ICONS = { "朝": "🌅", "昼": "☀️", "晩": "🌙" };
-const OPTIONS = ["◯", "△", "×"];
-
+const SLOTS = ["朝","昼","晩"];
+const SLOT_ICONS = {"朝":"🌅","昼":"☀️","晩":"🌙"};
+const OPTIONS = ["◯","△","×"];
 const today = new Date();
-const defaultDates = Array.from({ length: 14 }, (_, i) => {
+
+const defaultDates = Array.from({length:14},(_,i)=>{
   const d = new Date(today);
-  d.setDate(today.getDate() + i);
+  d.setDate(today.getDate()+i);
   return d.toISOString().split("T")[0];
 });
 
 let state = {
-  members: ["ひろみ", "まゆ", "なるき"],
+  members: ["ひろみ","まゆ","なるき"],
   dates: defaultDates,
   scheduleData: {},
+  confirmedList: [],
   activeMember: "ひろみ",
   tab: "calendar",
   calendarYear: today.getFullYear(),
   calendarMonth: today.getMonth(),
-  dropdownOpen: false,
-  loaded: false
+  dropdownOpen: false
 };
 
 function formatDate(str) {
-  const d = new Date(str + "T00:00:00");
+  const d = new Date(str+"T00:00:00");
   const days = ["日","月","火","水","木","金","土"];
   return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
 }
 
 function saveToFirebase() {
-  set(ref(db, "schedule"), {
+  set(ref(db,"schedule"), {
     members: state.members,
     dates: state.dates,
     scheduleData: state.scheduleData,
-    confirmedList: state.confirmedList || []
+    confirmedList: state.confirmedList
   });
 }
 
@@ -94,118 +93,102 @@ function getStatus(date, slot) {
 function getCircleCountBySlot(date) {
   const r = {};
   SLOTS.forEach(slot => {
-    r[slot] = state.members.filter(m => (state.scheduleData[date]?.[slot]?.[m] || "") === "◯").length;
+    r[slot] = state.members.filter(m => (state.scheduleData[date]?.[slot]?.[m]||"") === "◯").length;
   });
   return r;
 }
 
 function getCircleCount(date) {
-  return Object.values(getCircleCountBySlot(date)).reduce((a,b) => a+b, 0);
+  return Object.values(getCircleCountBySlot(date)).reduce((a,b)=>a+b,0);
 }
 
 function hasAllOK(date) {
-  return SLOTS.some(slot => getStatus(date, slot) === "best");
+  return SLOTS.some(slot => getStatus(date,slot) === "best");
 }
 
-// アバター文字（名前の頭文字）
-function avatarChar(name) {
-  return name.charAt(0);
-}
+function avatarChar(name) { return name.charAt(0); }
 
-function renderDropdown() {
-  const { members, activeMember, dropdownOpen } = state;
+function renderNav() {
+  const {tab, activeMember, dropdownOpen, members} = state;
   const items = members.map(m => `
-    <div onclick="selectMember('${m}')" class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer hover:bg-teal-50 transition-all ${m === activeMember ? 'bg-teal-50 font-bold text-teal-700' : 'text-gray-700'}">
-      <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${m === activeMember ? 'bg-teal-500 text-white' : 'bg-teal-100 text-teal-700'}">${avatarChar(m)}</div>
-      ${m}
-      ${m === activeMember ? '<span class="ml-auto text-teal-500 text-xs">✓</span>' : ''}
-    </div>
-  `).join("");
+    <div onclick="selectMember('${m}')" style="display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;cursor:pointer;background:${m===activeMember?'#E1F5EE':'white'};color:${m===activeMember?'#085041':'#374151'};font-weight:${m===activeMember?'600':'400'};">
+      <div style="width:22px;height:22px;border-radius:50%;background:${m===activeMember?'#1D9E75':'#E1F5EE'};color:${m===activeMember?'white':'#0F6E56'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${avatarChar(m)}</div>
+      ${m}${m===activeMember?' <span style="margin-left:auto;color:#1D9E75;">✓</span>':''}
+    </div>`).join("");
 
-  return `
-    <div class="relative" id="dropdown-wrap">
-      <button onclick="toggleDropdown()" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-all bg-teal-500 text-white border-teal-500 min-w-0">
-        <div class="w-5 h-5 rounded-full bg-white bg-opacity-30 flex items-center justify-center text-xs font-bold">${avatarChar(activeMember)}</div>
-        <span>${activeMember}</span>
-        <span class="text-xs opacity-80">${dropdownOpen ? '▲' : '▼'}</span>
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+    <button onclick="setTab('calendar')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='calendar'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300'}">📅 カレンダー</button>
+    <div style="position:relative;" id="dd-wrap">
+      <button onclick="toggleDropdown()" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500;background:#1D9E75;color:white;border:none;cursor:pointer;">
+        <div style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${avatarChar(activeMember)}</div>
+        ${activeMember} ${dropdownOpen?'▲':'▼'}
       </button>
-      <div class="dropdown-list ${dropdownOpen ? 'open' : ''}">
-        ${items}
-      </div>
-    </div>`;
+      <div class="dd-list ${dropdownOpen?'open':''}">${items}</div>
+    </div>
+    <button onclick="setTab('confirmed')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='confirmed'?'bg-green-500 text-white border-green-500':'bg-white text-gray-600 border-gray-300'}">🎉 確定日</button>
+    <button onclick="setTab('members')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='members'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300'}">👥 メンバー</button>
+    <button onclick="setTab('summary')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='summary'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300'}">📊 まとめ</button>
+  </div>`;
 }
 
 function renderCalendar() {
-  const { calendarYear, calendarMonth } = state;
+  const {calendarYear, calendarMonth} = state;
   const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
-  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const daysInMonth = new Date(calendarYear, calendarMonth+1, 0).getDate();
   const monthNames = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
   const dayNames = ["日","月","火","水","木","金","土"];
 
   let cells = "";
-  for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const isReg = state.dates.includes(dateStr);
-    const sc = isReg ? getCircleCountBySlot(dateStr) : {};
-    const total = isReg ? getCircleCount(dateStr) : 0;
-    const allOK = isReg && hasAllOK(dateStr);
-    const isToday = dateStr === today.toISOString().split("T")[0];
-    const dow = new Date(dateStr + "T00:00:00").getDay();
-    const confirmed = (state.confirmedList || []).filter(c => c.date === dateStr);
+  for (let i=0; i<firstDay; i++) cells += `<div></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const ds = `${calendarYear}-${String(calendarMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isReg = state.dates.includes(ds);
+    const sc = isReg ? getCircleCountBySlot(ds) : {};
+    const total = isReg ? getCircleCount(ds) : 0;
+    const allOK = isReg && hasAllOK(ds);
+    const isToday = ds === today.toISOString().split("T")[0];
+    const dow = new Date(ds+"T00:00:00").getDay();
+    const confirmed = state.confirmedList.filter(c => c.date === ds);
     const isConfirmed = confirmed.length > 0;
 
-    const bg = isConfirmed ? "bg-green-500 text-white" : allOK ? "bg-green-200" : total > 0 ? "bg-teal-100" : isToday ? "bg-teal-500 text-white" : "bg-white hover:bg-gray-50";
+    const bg = isConfirmed ? "bg-green-500 text-white" : allOK ? "bg-green-200" : total>0 ? "bg-teal-100" : isToday ? "bg-teal-500 text-white" : "bg-white hover:bg-gray-50";
     const border = isConfirmed ? "border-2 border-green-600" : isReg ? "border border-teal-300" : "border border-transparent";
     const numColor = !isConfirmed && !allOK && !isToday ? (dow===0?"text-red-500":dow===6?"text-blue-500":"text-gray-700") : "";
 
-    const cellContent = isConfirmed
-      ? `<div style="font-size:8px;font-weight:700;line-height:1.4;color:white;">✅<br>${confirmed[0].slot||""}<br>${confirmed[0].time ? confirmed[0].time.slice(0,5) : ""}</div>`
-      : isReg && total > 0
+    const inner = isConfirmed
+      ? `<div style="font-size:8px;font-weight:700;line-height:1.4;color:white;">✅<br>${confirmed[0].slot||""}<br>${confirmed[0].time?confirmed[0].time.slice(0,5):""}</div>`
+      : isReg && total>0
         ? `<div style="font-size:8px;font-weight:700;line-height:1.4;color:${allOK?"#166534":"#0F6E56"}">${allOK?"🎉":""}朝${sc["朝"]}<br>昼${sc["昼"]}<br>晩${sc["晩"]}</div>`
-        : isReg ? `<div class="text-xs" style="color:${isToday?"rgba(255,255,255,0.6)":"#d1d5db"}">−</div>` : "";
+        : isReg ? `<div class="text-xs" style="color:${isToday?"rgba(255,255,255,0.5)":"#d1d5db"}">−</div>` : "";
 
-    cells += `<div onclick="selectDate('${dateStr}')" class="rounded-xl p-1 text-center cursor-pointer transition-all ${bg} ${border}" style="min-height:54px;">
-      <div class="text-xs font-bold ${numColor}">${d}</div>
-      ${cellContent}
+    cells += `<div onclick="selectDate('${ds}')" class="rounded-xl p-1 text-center cursor-pointer transition-all ${bg} ${border}" style="min-height:54px;">
+      <div class="text-xs font-bold ${numColor}">${d}</div>${inner}
     </div>`;
   }
 
-  return `
-    <div class="bg-white rounded-2xl shadow-sm p-4 mb-4 fade-in">
-      <div class="flex items-center justify-between mb-3">
-        <button onclick="prevMonth()" class="text-teal-500 hover:text-teal-700 text-xl px-2">‹</button>
-        <span class="font-bold text-gray-700">${calendarYear}年 ${monthNames[calendarMonth]}</span>
-        <button onclick="nextMonth()" class="text-teal-500 hover:text-teal-700 text-xl px-2">›</button>
-      </div>
-      <div class="grid grid-cols-7 gap-1 mb-1">
-        ${dayNames.map((d,i)=>`<div class="text-center text-xs font-bold ${i===0?"text-red-400":i===6?"text-blue-400":"text-gray-400"}">${d}</div>`).join("")}
-      </div>
-      <div class="grid grid-cols-7 gap-1">${cells}</div>
-      <div class="mt-3 flex gap-3 text-xs text-gray-500 flex-wrap">
-        <span><span class="inline-block w-3 h-3 rounded bg-green-500 mr-1 border-2 border-green-600"></span>練習確定</span>
-        <span><span class="inline-block w-3 h-3 rounded bg-green-200 mr-1"></span>全員◯あり</span>
-        <span><span class="inline-block w-3 h-3 rounded bg-teal-100 mr-1"></span>◯回答あり</span>
-        <span><span class="inline-block w-3 h-3 rounded border border-teal-300 mr-1"></span>登録済み</span>
-      </div>
-    </div>`;
+  return `<div class="bg-white rounded-2xl shadow-sm p-4 mb-4 fade-in">
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="prevMonth()" class="text-teal-500 text-xl px-2">‹</button>
+      <span class="font-bold text-gray-700">${calendarYear}年 ${monthNames[calendarMonth]}</span>
+      <button onclick="nextMonth()" class="text-teal-500 text-xl px-2">›</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1 mb-1">
+      ${dayNames.map((d,i)=>`<div class="text-center text-xs font-bold ${i===0?"text-red-400":i===6?"text-blue-400":"text-gray-400"}">${d}</div>`).join("")}
+    </div>
+    <div class="grid grid-cols-7 gap-1">${cells}</div>
+    <div class="mt-3 flex gap-3 text-xs text-gray-500 flex-wrap">
+      <span><span class="inline-block w-3 h-3 rounded mr-1 border-2 border-green-600" style="background:#22c55e;"></span>練習確定</span>
+      <span><span class="inline-block w-3 h-3 rounded mr-1" style="background:#bbf7d0;"></span>全員◯あり</span>
+      <span><span class="inline-block w-3 h-3 rounded mr-1" style="background:#ccfbf1;"></span>◯回答あり</span>
+      <span><span class="inline-block w-3 h-3 rounded border border-teal-300 mr-1"></span>登録済み</span>
+    </div>
+  </div>`;
 }
 
 function render() {
-  const { dates, scheduleData, activeMember, tab, members } = state;
-
-  const navTabs = `
-    <div class="flex items-center gap-2 flex-wrap">
-      <button onclick="setTab('calendar')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='calendar'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300 hover:border-teal-400'}">📅 カレンダー</button>
-      ${tab==='input' || tab==='calendar' ? renderDropdown() : `<button onclick="setTab('input')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all bg-white text-gray-600 border-gray-300 hover:border-teal-400">${avatarChar(activeMember)} 入力</button>`}
-      <button onclick="setTab('confirmed')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='confirmed'?'bg-green-500 text-white border-green-500':'bg-white text-gray-600 border-gray-300 hover:border-green-400'}">🎉 確定日</button>
-      <button onclick="setTab('members')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='members'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300 hover:border-teal-400'}">👥 メンバー</button>
-      <button onclick="setTab('summary')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${tab==='summary'?'bg-teal-500 text-white border-teal-500':'bg-white text-gray-600 border-gray-300 hover:border-teal-400'}">📊 まとめ</button>
-    </div>`;
-
+  const {dates, scheduleData, activeMember, tab, members, confirmedList} = state;
   let content = "";
 
-  // ── カレンダー ──
   if (tab === "calendar") {
     content = renderCalendar();
     const list = dates.map(date => {
@@ -230,7 +213,6 @@ function render() {
     </div>`;
   }
 
-  // ── 入力 ──
   if (tab === "input") {
     content = `<div class="bg-teal-50 rounded-xl px-4 py-2 mb-3 text-sm text-teal-700 font-medium flex items-center gap-2">
       <div class="w-7 h-7 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold text-sm">${avatarChar(activeMember)}</div>
@@ -240,12 +222,8 @@ function render() {
       const slots = SLOTS.map(slot => {
         const val = scheduleData[date]?.[slot]?.[activeMember] || "";
         const btns = OPTIONS.map(opt => {
-          const active = val === opt;
-          const cls = active
-            ? (opt==="◯"?"bg-green-100 text-green-700 border-green-400 font-bold"
-              :opt==="△"?"bg-yellow-100 text-yellow-700 border-yellow-400 font-bold"
-              :"bg-red-100 text-red-600 border-red-300 font-bold")
-            : "bg-gray-50 text-gray-300 border-gray-200 hover:border-gray-400";
+          const a = val === opt;
+          const cls = a ? (opt==="◯"?"bg-green-100 text-green-700 border-green-400 font-bold":opt==="△"?"bg-yellow-100 text-yellow-700 border-yellow-400 font-bold":"bg-red-100 text-red-600 border-red-300 font-bold") : "bg-gray-50 text-gray-300 border-gray-200 hover:border-gray-400";
           return `<button onclick="vote('${date}','${slot}','${activeMember}','${opt}')" class="w-9 h-9 rounded-full border-2 text-sm transition-all ${cls}">${opt}</button>`;
         }).join("");
         return `<div class="text-center">
@@ -267,42 +245,19 @@ function render() {
     </div>`;
   }
 
-  // ── メンバー管理 ──
-  if (tab === "members") {
-    const list = members.map(m => `
-      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-        <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">${avatarChar(m)}</div>
-        <span class="flex-1 font-medium text-gray-700">${m}</span>
-        <button onclick="removeMember('${m}')" class="text-gray-300 hover:text-red-400 text-sm px-2">✕ 削除</button>
-      </div>`).join("");
-    content = `<div class="bg-white rounded-2xl shadow-sm p-4 fade-in">
-      <div class="font-bold text-gray-700 mb-3">👥 メンバー一覧（${members.length}名）</div>
-      <div class="space-y-2 mb-4">${list||'<div class="text-gray-300 text-sm text-center py-2">メンバーがいません</div>'}</div>
-      <div class="flex gap-2 items-center border-t border-gray-100 pt-3">
-        <input type="text" id="newMemberInput" placeholder="名前を入力..." maxlength="20"
-          class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400"
-          onkeydown="if(event.key==='Enter')addMember()">
-        <button onclick="addMember()" class="bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-600">＋ 追加</button>
-      </div>
-    </div>`;
-  }
-
-  // ── 練習確定日 ──
   if (tab === "confirmed") {
-    const confirmed = state.confirmedList || [];
-    const cards = confirmed.map((item, idx) => `
+    const cards = confirmedList.map((item,idx) => `
       <div class="bg-white rounded-2xl shadow-sm p-4 fade-in border-l-4 border-green-400">
         <div class="flex items-center justify-between mb-2">
-          <span class="font-bold text-gray-700 text-base">${formatDate(item.date)} ${item.slot ? `<span class="text-sm font-normal text-teal-600">${SLOT_ICONS[item.slot]} ${item.slot}</span>` : ""}</span>
+          <span class="font-bold text-gray-700">${formatDate(item.date)} ${item.slot?`<span class="text-sm font-normal text-teal-600">${SLOT_ICONS[item.slot]} ${item.slot}</span>`:""}</span>
           <button onclick="removeConfirmed(${idx})" class="text-gray-300 hover:text-red-400 text-xs">✕</button>
         </div>
-        ${item.place ? `<div class="flex items-center gap-1 text-sm text-gray-600 mb-1">📍 <span>${item.place}</span></div>` : ""}
-        ${item.time ? `<div class="flex items-center gap-1 text-sm text-gray-600 mb-1">⏰ <span>${item.time}</span></div>` : ""}
-        ${item.memo ? `<div class="flex items-center gap-1 text-sm text-gray-500 mt-1">📝 <span>${item.memo}</span></div>` : ""}
+        ${item.time?`<div class="text-sm text-gray-600 mb-1">⏰ ${item.time}</div>`:""}
+        ${item.place?`<div class="text-sm text-gray-600 mb-1">📍 ${item.place}</div>`:""}
+        ${item.memo?`<div class="text-sm text-gray-500">📝 ${item.memo}</div>`:""}
       </div>`).join("");
 
-    content = `
-      ${cards || '<div class="bg-white rounded-2xl p-6 text-center text-gray-300 text-sm">確定した練習日がまだありません</div>'}
+    content = `${cards||'<div class="bg-white rounded-2xl p-6 text-center text-gray-300 text-sm">確定した練習日がまだありません</div>'}
       <div class="bg-white rounded-2xl shadow-sm p-4 fade-in">
         <div class="font-bold text-gray-700 mb-3">🎉 練習日を確定する</div>
         <div class="space-y-2">
@@ -336,13 +291,32 @@ function render() {
       </div>`;
   }
 
-  else if (tab === "summary") {
+  if (tab === "members") {
+    const list = members.map(m => `
+      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+        <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">${avatarChar(m)}</div>
+        <span class="flex-1 font-medium text-gray-700">${m}</span>
+        <button onclick="removeMember('${m}')" class="text-gray-300 hover:text-red-400 text-sm px-2">✕ 削除</button>
+      </div>`).join("");
+    content = `<div class="bg-white rounded-2xl shadow-sm p-4 fade-in">
+      <div class="font-bold text-gray-700 mb-3">👥 メンバー一覧（${members.length}名）</div>
+      <div class="space-y-2 mb-4">${list||'<div class="text-gray-300 text-sm text-center py-2">メンバーがいません</div>'}</div>
+      <div class="flex gap-2 items-center border-t border-gray-100 pt-3">
+        <input type="text" id="newMemberInput" placeholder="名前を入力..." maxlength="20"
+          class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400"
+          onkeydown="if(event.key==='Enter')addMember()">
+        <button onclick="addMember()" class="bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-600">＋ 追加</button>
+      </div>
+    </div>`;
+  }
+
+  if (tab === "summary") {
     content = dates.map(date => {
       const slots = SLOTS.map(slot => {
         const status = getStatus(date, slot);
         const bg = status==="best"?"bg-green-50 border border-green-300":status==="maybe"?"bg-yellow-50 border border-yellow-200":"bg-gray-50";
         const badge = status==="best"?`<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">🎉 全員OK!</span>`:status==="maybe"?`<span class="text-xs bg-yellow-400 text-white px-2 py-0.5 rounded-full">△ 要確認</span>`:"";
-        const memberVotes = members.map(m => {
+        const mvotes = members.map(m => {
           const v = scheduleData[date]?.[slot]?.[m] || "－";
           const cls = v==="◯"?"text-green-600":v==="△"?"text-yellow-600":v==="×"?"text-red-500":"text-gray-300";
           return `<div class="flex items-center gap-1 text-sm"><span class="text-gray-500">${m}:</span><span class="font-bold ${cls}">${v}</span></div>`;
@@ -353,11 +327,11 @@ function render() {
           const cls = opt==="◯"?"bg-green-100 text-green-700":opt==="△"?"bg-yellow-100 text-yellow-700":"bg-red-100 text-red-600";
           return `<span class="px-2 py-0.5 rounded-full font-bold text-xs ${cls}">${opt} ${cnt}人</span>`;
         }).join("");
-        const unanswered = members.filter(m => (scheduleData[date]?.[slot]?.[m]||"")==="").length;
-        const uBadge = unanswered>0?`<span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 text-xs">未回答 ${unanswered}人</span>`:"";
+        const un = members.filter(m => (scheduleData[date]?.[slot]?.[m]||"")==="").length;
+        const uBadge = un>0?`<span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 text-xs">未回答 ${un}人</span>`:"";
         return `<div class="rounded-xl p-3 ${bg}">
           <div class="flex items-center justify-between mb-2"><span class="text-sm font-medium text-gray-600">${SLOT_ICONS[slot]} ${slot}</span>${badge}</div>
-          <div class="flex gap-3 flex-wrap mb-2">${memberVotes}</div>
+          <div class="flex gap-3 flex-wrap mb-2">${mvotes}</div>
           <div class="flex gap-2 flex-wrap">${counts}${uBadge}</div>
         </div>`;
       }).join("");
@@ -371,149 +345,99 @@ function render() {
   document.getElementById("app").innerHTML = `
     <div class="bg-white rounded-2xl shadow-sm p-4 mb-4">
       <div class="mb-3 rounded-xl overflow-hidden">
-        <img src="top.png" alt="ピックルボール練習" class="w-full object-cover rounded-xl" style="max-height:220px;" onerror="this.style.display='none'">
+        <img src="top.png" alt="ピックルボール" class="w-full object-cover rounded-xl" style="max-height:220px;" onerror="this.style.display='none'">
       </div>
       <div class="flex items-center gap-2 mb-3">
         <span class="text-2xl">🏓</span>
         <h1 class="text-xl font-bold text-teal-700">ピックルボール練習調整</h1>
         <span class="ml-auto text-xs text-teal-400">🔥 Firebase同期中</span>
       </div>
-      ${navTabs}
+      ${renderNav()}
     </div>
-    <div class="space-y-3">${content}</div>
-  `;
+    <div class="space-y-3">${content}</div>`;
 
-  // ドロップダウン外クリックで閉じる
   if (state.dropdownOpen) {
     setTimeout(() => {
-      document.addEventListener('click', closeDropdownOutside, { once: true });
+      document.addEventListener('click', e => {
+        if (!document.getElementById('dd-wrap')?.contains(e.target)) {
+          state.dropdownOpen = false;
+          render();
+        }
+      }, {once:true});
     }, 0);
   }
 }
 
-function closeDropdownOutside(e) {
-  if (!document.getElementById('dropdown-wrap')?.contains(e.target)) {
-    state.dropdownOpen = false;
-    render();
-  }
-}
-
-window.toggleDropdown = () => {
-  state.dropdownOpen = !state.dropdownOpen;
-  render();
+window.toggleDropdown = () => { state.dropdownOpen = !state.dropdownOpen; render(); };
+window.selectMember = m => { state.activeMember=m; state.dropdownOpen=false; state.tab="input"; render(); };
+window.setTab = t => { state.tab=t; state.dropdownOpen=false; render(); };
+window.prevMonth = () => { if(state.calendarMonth===0){state.calendarYear--;state.calendarMonth=11;}else state.calendarMonth--; render(); };
+window.nextMonth = () => { if(state.calendarMonth===11){state.calendarYear++;state.calendarMonth=0;}else state.calendarMonth++; render(); };
+window.selectDate = date => {
+  if (!state.dates.includes(date)) { state.dates=[...state.dates,date].sort(); ensureSlots(date); saveToFirebase(); }
+  state.tab="input"; render();
 };
-window.selectMember = (m) => {
-  state.activeMember = m;
-  state.dropdownOpen = false;
-  state.tab = "input";
-  render();
-};
-window.setTab = (t) => {
-  state.tab = t;
-  state.dropdownOpen = false;
-  render();
-};
-window.prevMonth = () => {
-  if (state.calendarMonth===0){state.calendarYear--;state.calendarMonth=11;}else state.calendarMonth--;
-  render();
-};
-window.nextMonth = () => {
-  if (state.calendarMonth===11){state.calendarYear++;state.calendarMonth=0;}else state.calendarMonth++;
-  render();
-};
-window.selectDate = (date) => {
-  if (!state.dates.includes(date)) {
-    state.dates = [...state.dates, date].sort();
-    ensureSlots(date);
-    saveToFirebase();
-  }
-  state.tab = "input";
-  render();
-};
-window.vote = (date, slot, member, val) => {
-  if (!state.scheduleData[date]) state.scheduleData[date] = {};
-  if (!state.scheduleData[date][slot]) state.scheduleData[date][slot] = {};
+window.vote = (date,slot,member,val) => {
+  if (!state.scheduleData[date]) state.scheduleData[date]={};
+  if (!state.scheduleData[date][slot]) state.scheduleData[date][slot]={};
   state.scheduleData[date][slot][member] = state.scheduleData[date][slot][member]===val?"":val;
-  saveToFirebase();
-  render();
+  saveToFirebase(); render();
 };
 window.addDate = () => {
-  const input = document.getElementById("newDateInput");
-  const d = input?.value;
-  if (!d || state.dates.includes(d)) return;
-  state.dates = [...state.dates, d].sort();
-  ensureSlots(d);
-  saveToFirebase();
-  render();
+  const d = document.getElementById("newDateInput")?.value;
+  if (!d||state.dates.includes(d)) return;
+  state.dates=[...state.dates,d].sort(); ensureSlots(d); saveToFirebase(); render();
 };
-window.removeDate = (date) => {
-  state.dates = state.dates.filter(d => d !== date);
-  delete state.scheduleData[date];
-  saveToFirebase();
-  render();
+window.removeDate = date => {
+  state.dates=state.dates.filter(d=>d!==date); delete state.scheduleData[date]; saveToFirebase(); render();
 };
 window.addMember = () => {
-  const input = document.getElementById("newMemberInput");
-  const name = input?.value.trim();
-  if (!name || state.members.includes(name)) return;
-  state.members = [...state.members, name];
-  state.dates.forEach(date => {
-    SLOTS.forEach(slot => {
-      if (!state.scheduleData[date]) state.scheduleData[date] = {};
-      if (!state.scheduleData[date][slot]) state.scheduleData[date][slot] = {};
-      state.scheduleData[date][slot][name] = "";
-    });
-  });
-  saveToFirebase();
-  render();
+  const name = document.getElementById("newMemberInput")?.value.trim();
+  if (!name||state.members.includes(name)) return;
+  state.members=[...state.members,name];
+  state.dates.forEach(date => { SLOTS.forEach(slot => { if(!state.scheduleData[date]) state.scheduleData[date]={}; if(!state.scheduleData[date][slot]) state.scheduleData[date][slot]={}; state.scheduleData[date][slot][name]=""; }); });
+  saveToFirebase(); render();
 };
-window.removeMember = (name) => {
-  if (!confirm(`「${name}」を削除しますか？この操作は取り消せません。`)) return;
-  state.members = state.members.filter(m => m !== name);
-  if (state.activeMember === name) state.activeMember = state.members[0] || "";
-  Object.keys(state.scheduleData).forEach(date => {
-    SLOTS.forEach(slot => {
-      if (state.scheduleData[date]?.[slot]) delete state.scheduleData[date][slot][name];
-    });
-  });
-  saveToFirebase();
-  render();
+window.removeMember = name => {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  state.members=state.members.filter(m=>m!==name);
+  if (state.activeMember===name) state.activeMember=state.members[0]||"";
+  Object.keys(state.scheduleData).forEach(date => { SLOTS.forEach(slot => { if(state.scheduleData[date]?.[slot]) delete state.scheduleData[date][slot][name]; }); });
+  saveToFirebase(); render();
 };
-
 window.addConfirmed = () => {
   const date = document.getElementById("cf_date")?.value;
   if (!date) { alert("日付を入力してください"); return; }
   const item = {
     date,
-    slot: document.getElementById("cf_slot")?.value || "",
-    time: document.getElementById("cf_time")?.value.trim() || "",
-    place: document.getElementById("cf_place")?.value.trim() || "",
-    memo: document.getElementById("cf_memo")?.value.trim() || ""
+    slot: document.getElementById("cf_slot")?.value||"",
+    time: document.getElementById("cf_time")?.value.trim()||"",
+    place: document.getElementById("cf_place")?.value.trim()||"",
+    memo: document.getElementById("cf_memo")?.value.trim()||""
   };
-  state.confirmedList = [...(state.confirmedList || []), item].sort((a,b) => a.date.localeCompare(b.date));
-  saveToFirebase();
-  render();
+  state.confirmedList=[...state.confirmedList,item].sort((a,b)=>a.date.localeCompare(b.date));
+  saveToFirebase(); render();
 };
-window.removeConfirmed = (idx) => {
+window.removeConfirmed = idx => {
   if (!confirm("この確定日を削除しますか？")) return;
-  state.confirmedList = (state.confirmedList || []).filter((_,i) => i !== idx);
-  saveToFirebase();
-  render();
+  state.confirmedList=state.confirmedList.filter((_,i)=>i!==idx);
+  saveToFirebase(); render();
 };
 
+onValue(ref(db,"schedule"), snapshot => {
   const data = snapshot.val();
   if (data) {
-    if (data.confirmedList) state.confirmedList = data.confirmedList;
-    const mergedDates = Array.from(new Set([...defaultDates, ...(data.dates||[])])).sort();
-    state.dates = mergedDates;
-    state.scheduleData = data.scheduleData || {};
-    mergedDates.forEach(date => ensureSlots(date));
-    if (!state.members.includes(state.activeMember)) state.activeMember = state.members[0] || "";
+    if (data.members) state.members=data.members;
+    if (data.confirmedList) state.confirmedList=data.confirmedList;
+    const merged = Array.from(new Set([...defaultDates,...(data.dates||[])])).sort();
+    state.dates=merged;
+    state.scheduleData=data.scheduleData||{};
+    merged.forEach(date=>ensureSlots(date));
+    if (!state.members.includes(state.activeMember)) state.activeMember=state.members[0]||"";
   } else {
-    state.scheduleData = {};
-    state.dates.forEach(date => ensureSlots(date));
+    state.scheduleData={};
+    state.dates.forEach(date=>ensureSlots(date));
   }
-  state.loaded = true;
   render();
 });
 </script>
