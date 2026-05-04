@@ -435,13 +435,17 @@ window.removeConfirmed = idx => {
 onValue(ref(db,"schedule"), snapshot => {
   const data = snapshot.val();
   if (data) {
-    if (data.members) state.members=data.members;
-    if (data.confirmedList) state.confirmedList=data.confirmedList;
-    const merged = Array.from(new Set([...defaultDates,...(data.dates||[])])).sort();
-    state.dates=merged;
-    state.scheduleData=data.scheduleData||{};
-    merged.forEach(date=>ensureSlots(date));
-    if (!state.members.includes(state.activeMember)) state.activeMember=state.members[0]||"";
+    if (data.members) state.members = data.members;
+    if (data.confirmedList) state.confirmedList = data.confirmedList;
+    // Firebaseにdatesが保存済みの場合はそれを優先（削除した日付を復活させない）
+    const savedDates = data.dates || [];
+    const merged = savedDates.length > 0
+      ? savedDates
+      : Array.from(new Set([...defaultDates, ...savedDates])).sort();
+    state.dates = merged;
+    state.scheduleData = data.scheduleData || {};
+    merged.forEach(date => ensureSlots(date));
+    if (!state.members.includes(state.activeMember)) state.activeMember = state.members[0] || "";
   } else {
     state.scheduleData={};
     state.dates.forEach(date=>ensureSlots(date));
